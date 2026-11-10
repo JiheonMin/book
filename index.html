@@ -783,7 +783,7 @@
       }
 
       // 3. 구글 시트 URL 로드
-      state.gasUrl = localStorage.getItem(STORAGE_KEY_GAS) || '';
+      state.gasUrl = localStorage.getItem(STORAGE_KEY_GAS) || 'https://script.google.com/macros/s/AKfycbzzsPZD747KQ9qDxy6S599_1CNCjtmdr4bdAIaCzrisOvB0RpHPWkLUbU5s7RK8-UKa/exec';
 
       // 클라우드 동기화가 설정되어 있으면 백그라운드 호출
       if (state.gasUrl) {
