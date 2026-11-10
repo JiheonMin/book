@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>서로의 갈피 - 전자책 교환독서</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#FBF9F5',
+              100: '#F4EFE6',
+              200: '#E6DCcb',
+              300: '#D5C3A8',
+              800: '#4A3E31',
+              900: '#2C241D',
+            },
+            clean: {
+              bg: '#FAF8F5',
+              card: '#FFFFFF',
+              border: '#EBE7DE',
+              subtle: '#F5F2EB'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            'serif-kr': ['"Noto Serif KR"', 'Nanum Myeongjo', 'Batang', 'serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Noto Serif KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tesseract.js (클라이언트 OCR) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    /* 미니멀 스크롤바 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F4EFE6;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #D5C3A8;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #A8957A;
+    }
+
+    /* 드래그 텍스트 하이라이트 */
+    ::selection {
+      background-color: #E6DCcb;
+      color: #2C241D;
+    }
+
+    /* 책꽂이 선반 디자인 */
+    .bookshelf-rack {
+      position: relative;
+      background: #FFFFFF;
+      border-bottom: 7px solid #D5C3A8;
+      box-shadow: 0 4px 6px -1px rgba(74, 62, 49, 0.05);
+    }
+    .bookshelf-rack::after {
+      content: '';
+      position: absolute;
+      bottom: -11px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #BFA888;
+    }
+
+    /* 캐릭터 세로형 스탠딩 슬롯 */
+    .standing-char-slot {
+      height: 72px;
+      width: 44px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .standing-char-slot.emoji-slot {
+      align-items: center;
+    }
+    .standing-char-slot img {
+      max-height: 100%;
+      max-width: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
+    }
+
+    /* 스포일러 방지 블러 효과 */
+    .spoiler-blurred {
+      filter: blur(6px);
+      user-select: none;
+      pointer-events: none;
+      transition: filter 0.25s ease;
+    }
+    .spoiler-overlay {
+      transition: all 0.2s ease;
+    }
+  </style>
+</head>
+<body class="bg-clean-bg text-stone-800 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- 1. 상단 글로벌 네비게이션 바 -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-clean-border sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+      
+      <!-- 로고 (깔끔한 책 픽토그램 SVG) -->
+      <div class="flex items-center gap-2.5 cursor-pointer" onclick="goToHome()">
+        <div class="w-8 h-8 rounded-lg bg-stone-900 text-white flex items-center justify-center shadow-xs">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+            <path d="M19 2H6c-1.2 0-2 .8-2 2v16c0 1.2.8 2 2 2h13c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1zm-1 16H6c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1h12v14z"/>
+            <path d="M8 7h8v2H8zm0 4h8v2H8z"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-serif-kr font-bold tracking-tight text-base text-stone-900">서로의 갈피</span>
+          <span class="hidden sm:inline-block text-[11px] text-stone-400 ml-1.5 font-light">전자책 교환독서</span>
+        </div>
+      </div>
+
+      <!-- 상단 우측: 내 프로필 & 관리자 설정 버튼 -->
+      <div class="flex items-center gap-2">
+        <button id="userProfileBtn" onclick="openProfileModal()" class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-clean-border bg-white hover:bg-stone-50 transition text-xs">
+          <span id="navCharIcon" class="text-sm">🐱</span>
+          <span id="navNickname" class="font-medium text-stone-800">참여자</span>
+          <i class="fa-solid fa-chevron-down text-[10px] text-stone-400"></i>
+        </button>
+
+        <button onclick="openSyncSettingsModal()" class="w-8 h-8 rounded-full border border-clean-border flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-50 transition text-xs" title="구글 시트 연동 설정">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- 2. 메인 콘텐츠 영역 -->
+  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-6">
+
+    <!-- [VIEW A] 메인 화면: 리딩 라운지 & 책꽂이 -->
+    <div id="homeView" class="space-y-8">
+
+      <!-- 2-A. Reading Lounge -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold tracking-wider text-stone-500 uppercase flex items-center gap-2">
+            <i class="fa-solid fa-bookmark text-stone-400 text-xs"></i>
+            멤버들의 독서 위치
+          </h2>
+          <button onclick="openUpdateLoungeModal()" class="px-2.5 py-1 text-xs font-medium bg-stone-900 text-white rounded-lg hover:bg-stone-800 transition shadow-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-pen-nib text-[10px]"></i>
+            내 독서 위치
+          </button>
+        </div>
+
+        <!-- 멤버 카드 그리드 -->
+        <div id="loungeContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <!-- JS로 동적 렌더링 -->
+        </div>
+      </section>
+
+      <!-- 2-B. 메인 서재 (따뜻한 선반형 우리의 서재) -->
+      <section class="space-y-4 pt-2">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-serif-kr font-bold text-stone-900 flex items-center gap-2">
+              <i class="fa-solid fa-book-bookmark text-stone-700 text-sm"></i>
+              우리의 서재
+            </h2>
+          </div>
+          <button onclick="openAddBookModal()" class="text-xs px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium rounded-lg transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus text-[10px]"></i>
+            새 책 꽂기
+          </button>
+        </div>
+
+        <!-- 책꽂이 선반 컨테이너 -->
+        <div class="bg-gradient-to-b from-stone-50/60 to-brand-100/40 rounded-3xl p-6 sm:p-8 border border-clean-border shadow-xs">
+          <div class="bookshelf-rack rounded-xl px-4 pt-4 pb-2 min-h-[220px] flex items-end">
+            <div id="bookshelfList" class="flex flex-wrap items-end gap-6 w-full">
+              <!-- JS로 책 렌더링 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- [VIEW B] 책 상세 및 교환독서 피드 화면 -->
+    <div id="bookDetailView" class="hidden space-y-6">
+
+      <!-- 뒤로가기 & 책 타이틀 헤더 -->
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <button onclick="goToHome()" class="text-xs text-stone-500 hover:text-stone-900 flex items-center gap-1.5 mb-2 transition">
+            <i class="fa-solid fa-arrow-left"></i>
+            서재로 돌아가기
+          </button>
+          <h1 id="bookDetailTitle" class="font-serif-kr text-xl sm:text-2xl font-bold text-stone-900 leading-tight">도서명</h1>
+          <p id="bookDetailAuthor" class="text-xs text-stone-500 mt-1">저자 정보</p>
+        </div>
+
+        <button onclick="openEditBookModal()" class="text-xs px-2.5 py-1.5 border border-clean-border rounded-lg text-stone-600 hover:bg-stone-50 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+          도서 정보 수정
+        </button>
+      </div>
+
+      <!-- 상단 뷰어 통일 바 (플랫폼, 글꼴/간격 정보) -->
+      <div class="bg-white border border-clean-border rounded-2xl p-4 shadow-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-clean-border pb-3">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-stone-100 text-stone-700 font-semibold text-[11px] uppercase tracking-wide">
+              뷰어 통일 약속
+            </span>
+            <span class="text-xs text-stone-500">페이지 불일치를 막기 위한 리더기 설정</span>
+          </div>
+          <button onclick="openViewerSettingModal()" class="text-xs text-stone-600 hover:text-stone-900 underline font-medium">
+            설정 변경
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 text-xs">
+          <div>
+            <span class="block text-[10px] text-stone-400">전자책 플랫폼</span>
+            <span id="detailViewerPlatform" class="font-medium text-stone-800">밀리의 서재</span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-stone-400">글꼴</span>
+            <span id="detailViewerFont" class="font-medium text-stone-800">기본 본문서체</span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-stone-400">글자 크기 / 줄간격</span>
+            <span id="detailViewerSpacing" class="font-medium text-stone-800">보통 / 1.5</span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-stone-400">독서 기간</span>
+            <span id="detailReadingPeriod" class="font-medium text-stone-800">2026.11.01 ~ 11.20</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 발췌문 등록 섹션 (OCR / 수기 타이핑) -->
+      <div class="bg-white border border-clean-border rounded-2xl p-5 shadow-xs space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-serif-kr font-bold text-sm text-stone-900 flex items-center gap-2">
+            <i class="fa-solid fa-highlighter text-stone-600 text-xs"></i>
+            마음에 드는 문장 남기기
+          </h3>
+          <span class="text-[11px] text-stone-400">페이지 순서로 자동 배치됩니다</span>
+        </div>
+
+        <!-- 캡처 이미지 OCR 첨부 영역 -->
+        <div class="border border-dashed border-stone-200 rounded-xl p-3 bg-stone-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-xs text-stone-600">
+            <i class="fa-solid fa-camera text-stone-400 text-sm"></i>
+            <span>캡처 이미지를 올리면 글자를 자동으로 읽어와요</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="file" id="ocrFileInput" accept="image/*" class="hidden" onchange="handleOcrImageUpload(event)">
+            <button onclick="document.getElementById('ocrFileInput').click()" class="px-3 py-1.5 bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs font-medium rounded-lg transition shadow-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-image text-[11px]"></i>
+              캡처로 글자 읽기
+            </button>
+            <span id="ocrStatusText" class="text-xs text-stone-500 hidden">
+              <i class="fa-solid fa-spinner fa-spin text-stone-600 mr-1"></i> 인식 중...
+            </span>
+          </div>
+        </div>
+
+        <!-- 입력 폼 -->
+        <div class="space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+              <span class="font-semibold text-stone-600">p.</span>
+              <input type="number" id="inputQuotePage" min="1" placeholder="페이지 번호" class="w-24 bg-transparent focus:outline-none font-mono font-semibold">
+            </div>
+            <span class="text-xs text-stone-400">뒤늦게 올려도 페이지 번호 순으로 정렬돼요</span>
+          </div>
+
+          <textarea id="inputQuoteText" rows="3" placeholder="기억하고 싶은 문장을 입력하거나 캡처를 업로드하세요." class="w-full p-3 font-serif-kr text-[13.5px] leading-relaxed bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300"></textarea>
+
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <input type="text" id="inputQuoteNote" placeholder="이 문장에 대한 내 생각이나 나누고 싶은 질문 (선택)" class="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-300">
+            <button onclick="submitQuote()" class="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-check text-[11px]"></i>
+              발췌 등록
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 교환독서 발췌 및 대화 피드 -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="font-serif-kr font-bold text-sm text-stone-900 flex items-center gap-2">
+            <i class="fa-solid fa-comments text-stone-600 text-xs"></i>
+            페이지별 나눔 기록
+          </h3>
+          <span id="quotesCountBadge" class="text-xs text-stone-500 font-mono">0개의 갈피</span>
+        </div>
+
+        <div id="quotesFeedList" class="space-y-4">
+          <!-- 발췌 카드들이 JS로 렌더링 -->
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ==================== 모달 영역 ==================== -->
+
+  <!-- A. 내 프로필 설정 모달 -->
+  <div id="profileModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900">내 프로필 설정</h3>
+        <button onclick="closeModal('profileModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">닉네임</label>
+          <input type="text" id="profileNicknameInput" maxlength="12" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">비밀번호 (4자리 회원코드)</label>
+          <div class="relative">
+            <input type="password" id="profileCodeInput" maxlength="8" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300 tracking-widest font-mono">
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-2.5 text-stone-400 hover:text-stone-700">
+              <i id="pwEyeIcon" class="fa-solid fa-eye text-xs"></i>
+            </button>
+          </div>
+          <span class="text-[10px] text-stone-400 mt-1 block">내가 쓴 글/댓글을 수정하고 보호하는 비밀번호입니다. (외부에 비공개)</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1.5">대표 이모지</label>
+          <div class="grid grid-cols-6 gap-2 text-xl p-2 bg-stone-50 rounded-xl border border-stone-200 text-center" id="emojiPickerList">
+            <button type="button" onclick="selectProfileEmoji('🐱')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🐱</button>
+            <button type="button" onclick="selectProfileEmoji('🐰')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🐰</button>
+            <button type="button" onclick="selectProfileEmoji('🐻')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🐻</button>
+            <button type="button" onclick="selectProfileEmoji('🦊')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🦊</button>
+            <button type="button" onclick="selectProfileEmoji('🐤')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🐤</button>
+            <button type="button" onclick="selectProfileEmoji('🐼')" class="emoji-opt p-1 hover:bg-stone-200 rounded-lg">🐼</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">스탠딩 캐릭터 이미지 URL (GitHub 등)</label>
+          <input type="text" id="profileCustomImageInput" placeholder="https://.../character.png" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+          <span class="text-[10px] text-stone-400 mt-1 block">투명 배경의 세로형 이미지 링크를 넣으면 라운지에 예쁘게 서 있어요.</span>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveProfile()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          프로필 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- B. 라운지: 내 독서 위치 & 카드 색상 모달 -->
+  <div id="updateLoungeModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900">내 독서 위치 갱신</h3>
+        <button onclick="closeModal('updateLoungeModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">읽고 있는 책</label>
+          <select id="loungeBookSelect" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+            <!-- JS로 옵션 로드 -->
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="flex-1">
+            <label class="block font-semibold text-stone-700 mb-1">현재 머무는 페이지</label>
+            <input type="number" id="loungePageInput" min="1" placeholder="예: 84" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300 font-mono">
+          </div>
+          <div class="w-24">
+            <label class="block font-semibold text-stone-700 mb-1">완독 여부</label>
+            <select id="loungeCompletedSelect" class="w-full px-2 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+              <option value="false">읽는 중</option>
+              <option value="true">완독 👏</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">지금 드는 생각 / 짧은 메모</label>
+          <input type="text" id="loungeMemoInput" maxlength="35" placeholder="예: 3장 문장이 너무 좋다..." class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">카드 배경 색상 (선택)</label>
+          <div class="flex items-center gap-2">
+            <div class="relative flex items-center">
+              <input type="color" id="loungeColorPicker" oninput="handleColorPickerChange(this.value)" class="w-9 h-9 p-0.5 rounded-xl border border-stone-200 cursor-pointer bg-white">
+            </div>
+            <div class="flex-1 relative">
+              <span class="absolute left-3 top-2 text-stone-400 font-mono text-xs">#</span>
+              <input type="text" id="loungeColorInput" maxlength="7" placeholder="FFFFFF (미입력 시 흰색)" oninput="handleColorTextChange(this.value)" class="w-full pl-7 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl font-mono text-xs focus:outline-none focus:ring-2 focus:ring-stone-300">
+            </div>
+            <button type="button" onclick="resetCardColorToDefault()" class="px-2.5 py-2 text-[11px] bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl transition whitespace-nowrap">
+              기본 흰색
+            </button>
+          </div>
+          <span class="text-[10px] text-stone-400 mt-1 block">원하는 HEX/RGB 코드를 적거나 색상판을 눌러 바로 지정하세요.</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center gap-2">
+        <button id="loungeDeleteBtn" type="button" onclick="deleteLoungeStatus()" class="px-3 py-3 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold transition hidden">
+          위치 삭제
+        </button>
+        <button onclick="saveLoungeStatus()" class="flex-1 py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          라운지에 반영하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- C. 새 책 추가 모달 -->
+  <div id="addBookModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900">새 책 꽂기</h3>
+        <button onclick="closeModal('addBookModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">도서 제목 *</label>
+          <input type="text" id="newBookTitle" placeholder="예: 밝은 밤" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">저자</label>
+          <input type="text" id="newBookAuthor" placeholder="예: 최은영" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">표지 이미지 링크 (선택)</label>
+          <input type="text" id="newBookCoverUrl" placeholder="https://.../cover.jpg (비워두면 기본 책등 생성)" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-stone-700 mb-1">총 페이지 수</label>
+            <input type="number" id="newBookTotalPages" value="300" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300 font-mono">
+          </div>
+          <div>
+            <label class="block font-semibold text-stone-700 mb-1">독서 기간</label>
+            <input type="text" id="newBookPeriod" placeholder="11.10 ~ 11.24" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveNewBook()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          서재에 꽂기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- D. 책 정보 수정 모달 -->
+  <div id="editBookModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900">도서 정보 수정</h3>
+        <button onclick="closeModal('editBookModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">도서 제목</label>
+          <input type="text" id="editBookTitle" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">저자</label>
+          <input type="text" id="editBookAuthor" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">표지 이미지 링크</label>
+          <input type="text" id="editBookCoverUrl" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-stone-700 mb-1">총 페이지 수</label>
+            <input type="number" id="editBookTotalPages" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300 font-mono">
+          </div>
+          <div>
+            <label class="block font-semibold text-stone-700 mb-1">독서 기간</label>
+            <input type="text" id="editBookPeriod" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveEditedBook()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          변경 사항 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- E. 뷰어 통일 설정 모달 -->
+  <div id="viewerSettingModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900">뷰어 통일 설정</h3>
+        <button onclick="closeModal('viewerSettingModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">전자책 플랫폼</label>
+          <select id="settingPlatform" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+            <option value="밀리의 서재">밀리의 서재</option>
+            <option value="알라딘 전자책">알라딘 전자책</option>
+            <option value="리디북스 (RIDI)">리디북스 (RIDI)</option>
+            <option value="예스24 크레마">예스24 크레마</option>
+            <option value="교보문고 sam">교보문고 sam</option>
+            <option value="기타">기타 / 커스텀</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">글꼴 (서체)</label>
+          <input type="text" id="settingFont" placeholder="예: 코펍명조, 나눔명조" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">글자 크기 & 줄간격</label>
+          <input type="text" id="settingSpacing" placeholder="예: 기본 3단계 / 줄간격 1.5배" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl">
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveViewerSettings()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          설정 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F. 문장 인용 답글 등록 모달 -->
+  <div id="quoteReplyModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900 flex items-center gap-2">
+          <i class="fa-solid fa-quote-left text-stone-600 text-xs"></i>
+          문장 인용하여 답글 남기기
+        </h3>
+        <button onclick="closeModal('quoteReplyModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-stone-500 mb-1 text-[11px]">인용한 구절</label>
+          <div id="replyModalQuotedText" class="p-3 bg-brand-50 rounded-xl border-l-[3px] border-stone-700 font-serif-kr text-[12.5px] italic text-stone-800 max-h-32 overflow-y-auto">
+            <!-- 인용 구절 노출 -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">내 생각 남기기</label>
+          <textarea id="replyModalInput" rows="3" placeholder="이 문장에 대해 떠오른 생각이나 답글을 남겨주세요." class="w-full p-3 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300"></textarea>
+        </div>
+      </div>
+
+      <div class="pt-1">
+        <button onclick="submitQuotedReply()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          답글 등록
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- G. 발췌문 수정 모달 -->
+  <div id="editQuoteModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900 flex items-center gap-2">
+          <i class="fa-solid fa-pen text-stone-600 text-xs"></i>
+          발췌문 수정
+        </h3>
+        <button onclick="closeModal('editQuoteModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="flex items-center gap-2 bg-stone-50 px-3 py-2 rounded-xl border border-stone-200">
+          <span class="font-semibold text-stone-600">페이지:</span>
+          <input type="number" id="editQuotePage" min="1" class="w-20 bg-transparent font-mono focus:outline-none font-semibold">
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">발췌 문장</label>
+          <textarea id="editQuoteText" rows="3" class="w-full p-3 font-serif-kr text-[13.5px] leading-relaxed bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300"></textarea>
+        </div>
+        <div>
+          <label class="block font-semibold text-stone-700 mb-1">내 생각 / 질문 메모</label>
+          <input type="text" id="editQuoteNote" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveEditedQuote()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          수정사항 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- H. 댓글(인용 답글) 수정 모달 -->
+  <div id="editReplyModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900 flex items-center gap-2">
+          <i class="fa-solid fa-pen text-stone-600 text-xs"></i>
+          답글 수정
+        </h3>
+        <button onclick="closeModal('editReplyModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <label class="block font-semibold text-stone-700">내 생각 / 답변</label>
+        <textarea id="editReplyContent" rows="3" class="w-full p-3 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300"></textarea>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="saveEditedReply()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          답글 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- I. 관리자 전용 구글 시트 연동 설정 모달 -->
+  <div id="syncSettingsModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
+        <h3 class="font-serif-kr font-bold text-base text-stone-900 flex items-center gap-2">
+          <i class="fa-solid fa-cloud text-stone-700 text-xs"></i>
+          구글 스프레드시트 동기화 설정
+        </h3>
+        <button onclick="closeModal('syncSettingsModal')" class="text-stone-400 hover:text-stone-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-stone-600 leading-relaxed">
+        구글 스프레드시트 Apps Script 웹앱 URL을 입력해두면, 참여자들이 별도로 연동 버튼을 누르지 않아도 모든 독서 위치와 글이 실시간 자동 동기화됩니다.
+      </p>
+
+      <div class="space-y-2 text-xs">
+        <label class="block font-semibold text-stone-700">Google Apps Script 웹앱 URL</label>
+        <input type="text" id="settingGasUrl" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+      </div>
+
+      <div class="pt-2 flex items-center gap-2">
+        <button onclick="saveGasUrlSettings()" class="flex-1 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+          연동 URL 저장
+        </button>
+        <button onclick="forceSyncFromRemote()" class="px-3 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-medium transition">
+          지금 새로고침
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 메시지 박스 -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-stone-900/90 text-white text-xs px-4 py-2.5 rounded-full shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none z-50">
+    알림 내용
+  </div>
+
+  <!-- ==================== 자바스크립트 로직 ==================== -->
+  <script>
+    /* 기본 데이터 구조 */
+    const STORAGE_KEY_DATA = 'seoro_bookclub_data_v2';
+    const STORAGE_KEY_USER = 'seoro_bookclub_user_v2';
+    const STORAGE_KEY_GAS = 'seoro_bookclub_gas_url_v2';
+
+    const DEFAULT_DATA = {
+      books: [],
+      lounge: []
+    };
+
+    /* 앱 상태 (State) */
+    let state = {
+      data: null,
+      user: null,
+      currentBookId: null,
+      gasUrl: '',
+      activeQuoteContext: {
+        quoteId: null,
+        snippet: ''
+      },
+      editingQuoteId: null,
+      editingReplyContext: {
+        quoteId: null,
+        replyId: null
+      },
+      selectedCardColor: '#FFFFFF'
+    };
+
+    /* ====================================================================
+       초기화 & 저장소 로직
+       ==================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadInitialState();
+      renderApp();
+
+      // 외부 드래그 이벤트 시 문장 인용 준비
+      document.addEventListener('selectionchange', () => {
+        // selection state check
+      });
+    });
+
+    function loadInitialState() {
+      // 1. 사용자 정보 로드 (없으면 기본값 생성)
+      const savedUser = localStorage.getItem(STORAGE_KEY_USER);
+      if (savedUser) {
+        try {
+          state.user = JSON.parse(savedUser);
+        } catch (e) {
+          state.user = generateDefaultUser();
+        }
+      } else {
+        state.user = generateDefaultUser();
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+      }
+
+      // 2. 책 & 라운지 데이터 로드
+      const savedData = localStorage.getItem(STORAGE_KEY_DATA);
+      if (savedData) {
+        try {
+          state.data = JSON.parse(savedData);
+        } catch (e) {
+          state.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        }
+      } else {
+        state.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(state.data));
+      }
+
+      // 3. 구글 시트 URL 로드
+      state.gasUrl = localStorage.getItem(STORAGE_KEY_GAS) || '';
+
+      // 클라우드 동기화가 설정되어 있으면 백그라운드 호출
+      if (state.gasUrl) {
+        fetchRemoteData();
+      }
+    }
+
+    function generateDefaultUser() {
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      return {
+        nickname: '갈피' + code.slice(-2),
+        code: code,
+        characterEmoji: '🐱',
+        customImageUrl: ''
+      };
+    }
+
+    function saveDataLocally() {
+      localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(state.data));
+    }
+
+    function autoSync() {
+      saveDataLocally();
+      if (state.gasUrl) {
+        sendRemoteData();
+      }
+    }
+
+    /* 백그라운드 자동 연동 (Silent Sync) */
+    async function sendRemoteData() {
+      if (!state.gasUrl) return;
+      try {
+        await fetch(state.gasUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save',
+            payload: state.data
+          })
+        });
+      } catch (err) {
+        console.warn('백그라운드 동기화 실패 (로컬 스토리지에 유지됨):', err);
+      }
+    }
+
+    async function fetchRemoteData() {
+      if (!state.gasUrl) return;
+      try {
+        const res = await fetch(state.gasUrl + '?action=get');
+        if (res.ok) {
+          const remoteJson = await res.json();
+          if (remoteJson && remoteJson.books) {
+            state.data = remoteJson;
+            saveDataLocally();
+            renderApp();
+          }
+        }
+      } catch (err) {
+        console.warn('원격 데이터 가져오기 실패:', err);
+      }
+    }
+
+    /* ====================================================================
+       렌더링 로직 (뷰 전환, 책꽂이, 라운지, 피드)
+       ==================================================================== */
+    function renderApp() {
+      updateHeaderProfileUI();
+      renderLounge();
+      renderBookshelf();
+      if (state.currentBookId) {
+        const book = state.data.books.find(b => b.id === state.currentBookId);
+        if (book) renderBookDetail(book);
+      }
+    }
+
+    function updateHeaderProfileUI() {
+      if (!state.user) return;
+      const navCharIcon = document.getElementById('navCharIcon');
+      const navNickname = document.getElementById('navNickname');
+      if (navCharIcon) navCharIcon.textContent = state.user.characterEmoji || '🐱';
+      if (navNickname) navNickname.textContent = state.user.nickname;
+    }
+
+    /* Reading Lounge 렌더링 */
+    function renderLounge() {
+      const container = document.getElementById('loungeContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const members = state.data.lounge || [];
+      if (members.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-6 text-center text-xs text-stone-400 bg-white rounded-2xl border border-clean-border">
+            아직 독서 위치를 등록한 멤버가 없어요. 첫 번째로 위치를 남겨보세요!
+          </div>
+        `;
+        return;
+      }
+
+      members.forEach(m => {
+        const card = document.createElement('div');
+        const bg = m.cardColor || '#FFFFFF';
+        card.className = 'rounded-2xl p-3.5 border border-clean-border shadow-xs flex items-center gap-3 transition hover:shadow-sm';
+        card.style.backgroundColor = bg;
+
+        // 세로형 스탠딩 캐릭터 슬롯
+        let charHtml = '';
+        if (m.customImageUrl) {
+          charHtml = `
+            <div class="standing-char-slot">
+              <img src="${escapeHtml(m.customImageUrl)}" alt="${escapeHtml(m.nickname)}" onerror="this.onerror=null; this.parentElement.classList.add('emoji-slot'); this.parentElement.innerHTML='<span class=\\'text-2xl leading-none\\'>${m.characterEmoji || '🐱'}</span>';">
+            </div>
+          `;
+        } else {
+          charHtml = `
+            <div class="standing-char-slot emoji-slot">
+              <span class="text-3xl leading-none">${m.characterEmoji || '🐱'}</span>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          ${charHtml}
+          <div class="flex-1 min-w-0 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-stone-900 truncate">${escapeHtml(m.nickname)}</span>
+              <span class="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-stone-900 text-white">
+                ${m.isCompleted ? '완독 🎉' : `p.${m.currentPage}`}
+              </span>
+            </div>
+            <div class="text-[11px] text-stone-600 truncate flex items-center gap-1">
+              <i class="fa-solid fa-book-open text-[10px] text-stone-400"></i>
+              <span class="font-medium">${escapeHtml(m.bookTitle)}</span>
+            </div>
+            <div class="text-[11px] text-stone-500 italic truncate">
+              "${escapeHtml(m.memo || '열심히 읽는 중')}"
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    /* 책꽂이 (화이트 미니멀 서재) 렌더링 */
+    function renderBookshelf() {
+      const container = document.getElementById('bookshelfList');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (state.data.books.length === 0) {
+        container.innerHTML = `
+          <div class="w-full py-12 text-center text-xs text-stone-400">
+            꽂힌 책이 아직 없어요. 우측 상단의 <strong>[새 책 꽂기]</strong>를 눌러 첫 책을 등록해 보세요!
+          </div>
+        `;
+        return;
+      }
+
+      // 책등용 감성 파스텔-어스 톤 색상 팔레트
+      const spineColors = [
+        'bg-amber-50/90 border-amber-200 text-stone-800',
+        'bg-stone-100/90 border-stone-300 text-stone-800',
+        'bg-orange-50/90 border-orange-200 text-stone-800',
+        'bg-emerald-50/90 border-emerald-200 text-stone-800',
+        'bg-sky-50/90 border-sky-200 text-stone-800',
+        'bg-rose-50/90 border-rose-200 text-stone-800'
+      ];
+
+      state.data.books.forEach((book, idx) => {
+        const spine = document.createElement('div');
+        spine.className = 'cursor-pointer group relative flex flex-col items-center transition-all duration-200 hover:-translate-y-2';
+        spine.onclick = () => openBookDetail(book.id);
+
+        const quoteCount = (book.quotes || []).length;
+        const colorClass = spineColors[idx % spineColors.length];
+
+        if (book.coverUrl) {
+          // 표지 이미지가 있는 경우
+          spine.innerHTML = `
+            <div class="w-24 sm:w-28 h-36 sm:h-40 rounded-lg overflow-hidden shadow-sm border border-stone-200 bg-white relative transition group-hover:shadow-md">
+              <img src="${escapeHtml(book.coverUrl)}" alt="${escapeHtml(book.title)}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/120x160/F5F2EB/2C241D?text=Book';">
+              <span class="absolute bottom-1 right-1 bg-stone-900/80 text-white font-mono text-[9px] px-1.5 py-0.5 rounded backdrop-blur-xs">
+                ${quoteCount} 발췌
+              </span>
+            </div>
+            <div class="w-24 sm:w-28 mt-2 text-center">
+              <h4 class="font-serif-kr font-bold text-xs text-stone-800 truncate">${escapeHtml(book.title)}</h4>
+              <p class="text-[10px] text-stone-400 truncate">${escapeHtml(book.author || '')}</p>
+            </div>
+          `;
+        } else {
+          // 감성 책등 디자인 (세로 줄무늬 및 북스파인 라인 포인트)
+          spine.innerHTML = `
+            <div class="w-20 sm:w-24 h-36 sm:h-40 rounded-lg ${colorClass} border shadow-xs p-2.5 flex flex-col justify-between transition-all group-hover:border-stone-400 group-hover:shadow-sm relative overflow-hidden">
+              <div class="absolute left-1.5 top-0 bottom-0 w-[1px] bg-stone-300/60"></div>
+              <div class="space-y-1 pl-1.5">
+                <span class="text-[9px] font-mono text-stone-400 block">${escapeHtml(book.readingPeriod || '')}</span>
+                <h4 class="font-serif-kr font-bold text-xs text-stone-900 line-clamp-3 leading-snug">${escapeHtml(book.title)}</h4>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-stone-400 pt-1.5 border-t border-stone-200/70 font-mono pl-1.5">
+                <span>${book.totalPages}p</span>
+                <span class="font-semibold text-stone-700">${quoteCount}💬</span>
+              </div>
+            </div>
+            <div class="w-20 sm:w-24 mt-2 text-center">
+              <p class="text-[10px] text-stone-400 truncate">${escapeHtml(book.author || '')}</p>
+            </div>
+          `;
+        }
+
+        container.appendChild(spine);
+      });
+    }
+
+    /* 책 상세 화면 열기 */
+    function openBookDetail(bookId) {
+      state.currentBookId = bookId;
+      const book = state.data.books.find(b => b.id === bookId);
+      if (!book) return;
+
+      document.getElementById('homeView').classList.add('hidden');
+      document.getElementById('bookDetailView').classList.remove('hidden');
+
+      renderBookDetail(book);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function goToHome() {
+      state.currentBookId = null;
+      document.getElementById('bookDetailView').classList.add('hidden');
+      document.getElementById('homeView').classList.remove('hidden');
+      renderApp();
+    }
+
+    function renderBookDetail(book) {
+      document.getElementById('bookDetailTitle').textContent = book.title;
+      document.getElementById('bookDetailAuthor').textContent = `${book.author || '저자 미상'} · 총 ${book.totalPages}페이지`;
+
+      const vs = book.viewerSettings || { platform: '밀리의 서재', font: '기본체', spacing: '보통' };
+      document.getElementById('detailViewerPlatform').textContent = vs.platform || '밀리의 서재';
+      document.getElementById('detailViewerFont').textContent = vs.font || '기본 서체';
+      document.getElementById('detailViewerSpacing').textContent = vs.spacing || '기본 간격';
+      document.getElementById('detailReadingPeriod').textContent = book.readingPeriod || '미정';
+
+      renderQuotesFeed(book);
+    }
+
+    /* 발췌문 피드 (무조건 페이지 번호 순 오름차순 정렬) */
+    function renderQuotesFeed(book) {
+      const feedList = document.getElementById('quotesFeedList');
+      const badge = document.getElementById('quotesCountBadge');
+      if (!feedList) return;
+
+      const quotes = book.quotes || [];
+      badge.textContent = `${quotes.length}개의 갈피`;
+      feedList.innerHTML = '';
+
+      if (quotes.length === 0) {
+        feedList.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 border border-clean-border text-center text-xs text-stone-400 space-y-2">
+            <i class="fa-solid fa-feather text-stone-300 text-lg block mb-1"></i>
+            첫 번째 발췌 문장을 남겨 교환독서를 시작해 보세요.
+          </div>
+        `;
+        return;
+      }
+
+      // 페이지 번호 순 자동 정렬
+      quotes.sort((a, b) => (Number(a.page) || 0) - (Number(b.page) || 0));
+
+      quotes.forEach(quote => {
+        const card = createQuoteCard(quote);
+        feedList.appendChild(card);
+      });
+    }
+
+    /* 발췌문 개별 카드 엘리먼트 생성 */
+    function createQuoteCard(quote) {
+      const card = document.createElement('div');
+      card.id = `quote-card-${quote.id}`;
+      card.className = 'bg-white rounded-2xl p-5 border border-clean-border shadow-xs space-y-3 relative overflow-hidden';
+
+      const isMyQuote = (state.user && quote.authorNickname === state.user.nickname);
+
+      // 내 현재 도서 독서 위치(페이지) 확인 (스포일러 방지)
+      const currentBook = state.data.books.find(b => b.id === state.currentBookId);
+      const myLoungeRecord = state.data.lounge.find(l => 
+        l.nickname === (state.user ? state.user.nickname : '') && 
+        currentBook && l.bookTitle === currentBook.title
+      );
+      
+      const myCurrentPage = myLoungeRecord ? (myLoungeRecord.isCompleted ? 999999 : (Number(myLoungeRecord.currentPage) || 0)) : 0;
+      const isSpoiler = (Number(quote.page) > myCurrentPage);
+
+      // 닉네임만 표시 (비밀번호/코드는 비공개) + 본인 작성 글 수정/삭제 액션
+      const repliesHtml = (quote.replies || []).map(r => {
+        const isMyReply = (state.user && r.authorNickname === state.user.nickname);
+        return `
+          <div class="bg-stone-50 p-3 rounded-xl border border-stone-200/70 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 font-semibold text-stone-800">
+                <span class="text-sm">${r.characterEmoji || '🐱'}</span>
+                <span>${escapeHtml(r.authorNickname)}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-stone-400 font-mono">${escapeHtml(r.createdAt || '')}</span>
+                ${isMyReply ? `
+                  <div class="flex items-center gap-1.5 ml-1 text-[11px] text-stone-400">
+                    <button onclick="openEditReplyModal('${quote.id}', '${r.id}')" title="답글 수정" class="hover:text-stone-800 transition">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button onclick="deleteReply('${quote.id}', '${r.id}')" title="답글 삭제" class="hover:text-red-600 transition">
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+            ${r.quotedText ? `
+              <div class="text-[11px] font-serif-kr text-stone-700 bg-brand-100/70 p-2 rounded-lg border-l-2 border-stone-500 italic">
+                "${escapeHtml(r.quotedText)}"
+              </div>
+            ` : ''}
+
+            <p class="text-stone-800 leading-relaxed font-sans">${escapeHtml(r.text)}</p>
+          </div>
+        `;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between pb-2 border-b border-stone-100">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-stone-900 text-white">
+              p.${quote.page}
+            </span>
+            <div class="flex items-center gap-1.5 text-xs">
+              <span class="text-sm">${quote.characterEmoji || '📖'}</span>
+              <span class="font-bold text-stone-800">${escapeHtml(quote.authorNickname)}</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono text-stone-400">${escapeHtml(quote.createdAt)}</span>
+            ${isMyQuote ? `
+              <div class="flex items-center gap-1.5 text-stone-400 text-xs pl-1">
+                <button onclick="openEditQuoteModal('${quote.id}')" title="발췌 수정" class="hover:text-stone-800 transition p-1">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteQuote('${quote.id}')" title="발췌 삭제" class="hover:text-red-600 transition p-1">
+                  <i class="fa-regular fa-trash-can"></i>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <div>
+          <!-- 자연스럽고 부담 없는 본문 인용 크기 (text-sm font-serif-kr) -->
+          <blockquote id="quote-body-${quote.id}" class="text-[13.5px] font-serif-kr text-stone-800 leading-relaxed p-3.5 bg-brand-50/60 rounded-xl border-l-[3px] border-stone-700 italic select-text">
+            ${escapeHtml(quote.text)}
+          </blockquote>
+          <div class="mt-2 flex items-center justify-between">
+            <button onclick="openReplyModalWithFullQuote('${quote.id}')" class="text-[11px] text-stone-500 hover:text-stone-900 flex items-center gap-1 px-2 py-0.5 rounded hover:bg-stone-100 transition">
+              <i class="fa-solid fa-reply text-[10px] text-stone-400"></i>
+              <span>전체 문장 인용하여 답글</span>
+            </button>
+            <span class="text-[10px] text-stone-400">문장을 드래그해도 바로 답글 창이 열려요</span>
+          </div>
+        </div>
+
+        ${quote.note ? `
+          <div class="text-xs text-stone-600 bg-stone-50 px-3 py-2 rounded-xl border border-stone-200/60 flex items-start gap-2">
+            <i class="fa-regular fa-comment text-stone-400 mt-0.5"></i>
+            <span class="flex-1 leading-snug">${escapeHtml(quote.note)}</span>
+          </div>
+        ` : ''}
+
+        <div class="pt-2 space-y-2 border-t border-stone-100">
+          <div class="text-[11px] font-semibold text-stone-600">
+            함께 나눈 생각 (${(quote.replies || []).length})
+          </div>
+          <div class="space-y-2">
+            ${repliesHtml}
+          </div>
+        </div>
+      `;
+
+      // 스포일러 대상인 경우 블러 래핑 및 해제 오버레이 추가
+      if (isSpoiler) {
+        const innerContent = card.innerHTML;
+        card.innerHTML = `
+          <div id="spoiler-wrapper-${quote.id}" class="spoiler-blurred space-y-3 transition duration-200">
+            ${innerContent}
+          </div>
+          <div id="spoiler-curtain-${quote.id}" onclick="unmaskSpoiler('${quote.id}')" class="spoiler-overlay absolute inset-0 z-20 bg-stone-900/10 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 cursor-pointer hover:bg-stone-900/15 text-center">
+            <div class="px-3 py-2 bg-stone-900/90 text-white rounded-xl text-xs font-medium shadow-md flex items-center gap-2">
+              <i class="fa-solid fa-eye-slash text-stone-300"></i>
+              <span>아직 읽지 않은 구간 (p.${quote.page})</span>
+            </div>
+            <span class="text-[11px] text-stone-600 font-medium mt-1.5 bg-white/80 px-2 py-0.5 rounded-full shadow-2xs">클릭하여 스포일러 확인하기</span>
+          </div>
+        `;
+      }
+
+      setTimeout(() => {
+        const el = card.querySelector(`#quote-body-${quote.id}`);
+        if (el) {
+          el.addEventListener('mouseup', () => handleQuoteSelection(quote.id));
+          el.addEventListener('touchend', () => handleQuoteSelection(quote.id));
+        }
+      }, 50);
+
+      return card;
+    }
+
+    /* 스포일러 블러 원클릭 해제 */
+    function unmaskSpoiler(quoteId) {
+      const wrapper = document.getElementById(`spoiler-wrapper-${quoteId}`);
+      const curtain = document.getElementById(`spoiler-curtain-${quoteId}`);
+      if (wrapper) wrapper.classList.remove('spoiler-blurred');
+      if (curtain) {
+        curtain.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => curtain.remove(), 200);
+      }
+    }
+
+    /* 텍스트 드래그 인용 답글 열기 */
+    function handleQuoteSelection(quoteId) {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        if (selectedText && selectedText.length > 2) {
+          openReplyModal(quoteId, selectedText);
+        }
+      }, 100);
+    }
+
+    function openReplyModalWithFullQuote(quoteId) {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+      openReplyModal(quoteId, quote.text);
+    }
+
+    function openReplyModal(quoteId, snippet) {
+      state.activeQuoteContext = { quoteId, snippet };
+      document.getElementById('replyModalQuotedText').textContent = `"${snippet}"`;
+      document.getElementById('replyModalInput').value = '';
+      openModal('quoteReplyModal');
+    }
+
+    function submitQuotedReply() {
+      const { quoteId, snippet } = state.activeQuoteContext;
+      const text = document.getElementById('replyModalInput').value.trim();
+      if (!text) {
+        showToast('답글 내용을 입력해 주세요.');
+        return;
+      }
+
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+
+      if (!quote.replies) quote.replies = [];
+
+      const now = new Date();
+      const dateStr = `${now.getMonth() + 1}.${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      quote.replies.push({
+        id: 'r-' + Date.now(),
+        quotedText: snippet,
+        text: text,
+        authorNickname: state.user.nickname,
+        characterEmoji: state.user.characterEmoji || '🐱',
+        createdAt: dateStr
+      });
+
+      autoSync();
+      closeModal('quoteReplyModal');
+      renderQuotesFeed(book);
+      showToast('인용 답글이 등록되었습니다!');
+    }
+
+    /* ====================================================================
+       발췌문 & 댓글 수정 및 삭제 기능
+       ==================================================================== */
+    function openEditQuoteModal(quoteId) {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+
+      state.editingQuoteId = quoteId;
+      document.getElementById('editQuotePage').value = quote.page;
+      document.getElementById('editQuoteText').value = quote.text;
+      document.getElementById('editQuoteNote').value = quote.note || '';
+
+      openModal('editQuoteModal');
+    }
+
+    function saveEditedQuote() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book || !state.editingQuoteId) return;
+
+      const quote = (book.quotes || []).find(q => q.id === state.editingQuoteId);
+      if (!quote) return;
+
+      const page = parseInt(document.getElementById('editQuotePage').value, 10);
+      const text = document.getElementById('editQuoteText').value.trim();
+      const note = document.getElementById('editQuoteNote').value.trim();
+
+      if (isNaN(page) || page <= 0) {
+        showToast('올바른 페이지 번호를 입력해 주세요.');
+        return;
+      }
+      if (!text) {
+        showToast('발췌 문장을 입력해 주세요.');
+        return;
+      }
+
+      quote.page = page;
+      quote.text = text;
+      quote.note = note;
+
+      autoSync();
+      closeModal('editQuoteModal');
+      renderQuotesFeed(book);
+      showToast('발췌문이 수정되었습니다.');
+    }
+
+    function deleteQuote(quoteId) {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      const idx = (book.quotes || []).findIndex(q => q.id === quoteId);
+      if (idx === -1) return;
+
+      book.quotes.splice(idx, 1);
+      autoSync();
+      renderQuotesFeed(book);
+      renderBookshelf();
+      showToast('발췌문이 삭제되었습니다.');
+    }
+
+    function openEditReplyModal(quoteId, replyId) {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+      const reply = (quote.replies || []).find(r => r.id === replyId);
+      if (!reply) return;
+
+      state.editingReplyContext = { quoteId, replyId };
+      document.getElementById('editReplyContent').value = reply.text;
+      openModal('editReplyModal');
+    }
+
+    function saveEditedReply() {
+      const { quoteId, replyId } = state.editingReplyContext;
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+      const reply = (quote.replies || []).find(r => r.id === replyId);
+      if (!reply) return;
+
+      const newText = document.getElementById('editReplyContent').value.trim();
+      if (!newText) {
+        showToast('답글 내용을 입력해 주세요.');
+        return;
+      }
+
+      reply.text = newText;
+      autoSync();
+      closeModal('editReplyModal');
+      renderQuotesFeed(book);
+      showToast('답글이 수정되었습니다.');
+    }
+
+    function deleteReply(quoteId, replyId) {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote || !quote.replies) return;
+
+      const rIdx = quote.replies.findIndex(r => r.id === replyId);
+      if (rIdx === -1) return;
+
+      quote.replies.splice(rIdx, 1);
+      autoSync();
+      renderQuotesFeed(book);
+      showToast('답글이 삭제되었습니다.');
+    }
+
+    /* ====================================================================
+       새 발췌문 등록 & Tesseract OCR 처리
+       ==================================================================== */
+    function submitQuote() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      const page = parseInt(document.getElementById('inputQuotePage').value, 10);
+      const text = document.getElementById('inputQuoteText').value.trim();
+      const note = document.getElementById('inputQuoteNote').value.trim();
+
+      if (isNaN(page) || page <= 0) {
+        showToast('페이지 번호를 입력해 주세요.');
+        return;
+      }
+      if (!text) {
+        showToast('발췌할 문장을 입력해 주세요.');
+        return;
+      }
+
+      const now = new Date();
+      const dateStr = `${now.getMonth() + 1}.${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      if (!book.quotes) book.quotes = [];
+
+      book.quotes.push({
+        id: 'q-' + Date.now(),
+        page: page,
+        text: text,
+        note: note,
+        authorNickname: state.user.nickname,
+        characterEmoji: state.user.characterEmoji || '🐱',
+        createdAt: dateStr,
+        replies: []
+      });
+
+      // 입력창 초기화
+      document.getElementById('inputQuotePage').value = '';
+      document.getElementById('inputQuoteText').value = '';
+      document.getElementById('inputQuoteNote').value = '';
+
+      autoSync();
+      renderQuotesFeed(book);
+      renderBookshelf();
+      showToast('발췌문이 등록되었습니다 (페이지 순 정렬됨)');
+    }
+
+    async function handleOcrImageUpload(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('ocrStatusText');
+      statusEl.classList.remove('hidden');
+
+      try {
+        const { data: { text } } = await Tesseract.recognize(file, 'kor+eng', {
+          logger: m => console.log(m)
+        });
+
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (cleaned) {
+          document.getElementById('inputQuoteText').value = cleaned;
+          showToast('이미지에서 문장을 성공적으로 읽어왔습니다!');
+        } else {
+          showToast('텍스트를 인식하지 못했습니다. 직접 입력해 주세요.');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('글자 인식 중 오류가 발생했습니다.');
+      } finally {
+        statusEl.classList.add('hidden');
+        e.target.value = '';
+      }
+    }
+
+    /* ====================================================================
+       프로필 & 라운지 & 책 관리
+       ==================================================================== */
+    function openProfileModal() {
+      document.getElementById('profileNicknameInput').value = state.user.nickname;
+      document.getElementById('profileCodeInput').value = state.user.code;
+      document.getElementById('profileCustomImageInput').value = state.user.customImageUrl || '';
+      openModal('profileModal');
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('profileCodeInput');
+      const icon = document.getElementById('pwEyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    function selectProfileEmoji(emoji) {
+      state.user.characterEmoji = emoji;
+      showToast(`이모지가 '${emoji}'로 선택되었습니다.`);
+    }
+
+    function saveProfile() {
+      const nickname = document.getElementById('profileNicknameInput').value.trim();
+      const code = document.getElementById('profileCodeInput').value.trim();
+      const customImg = document.getElementById('profileCustomImageInput').value.trim();
+
+      if (!nickname) {
+        showToast('닉네임을 입력해 주세요.');
+        return;
+      }
+
+      state.user.nickname = nickname;
+      state.user.code = code || '0000';
+      state.user.customImageUrl = customImg;
+
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+
+      // 라운지에 내 정보 동기화
+      const myLoungeIdx = state.data.lounge.findIndex(l => l.nickname === nickname);
+      if (myLoungeIdx !== -1) {
+        state.data.lounge[myLoungeIdx].characterEmoji = state.user.characterEmoji;
+        state.data.lounge[myLoungeIdx].customImageUrl = customImg;
+      }
+
+      autoSync();
+      closeModal('profileModal');
+      renderApp();
+      showToast('프로필이 저장되었습니다.');
+    }
+
+    /* 라운지 내 독서 위치 갱신 */
+    function openUpdateLoungeModal() {
+      const select = document.getElementById('loungeBookSelect');
+      select.innerHTML = '';
+
+      state.data.books.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.title;
+        opt.textContent = b.title;
+        select.appendChild(opt);
+      });
+
+      // 기존 등록 정보가 있으면 채우기
+      const myRecord = state.data.lounge.find(l => l.nickname === state.user.nickname);
+      const deleteBtn = document.getElementById('loungeDeleteBtn');
+      let initColor = '#FFFFFF';
+      if (myRecord) {
+        select.value = myRecord.bookTitle;
+        document.getElementById('loungePageInput').value = myRecord.currentPage || '';
+        document.getElementById('loungeCompletedSelect').value = myRecord.isCompleted ? 'true' : 'false';
+        document.getElementById('loungeMemoInput').value = myRecord.memo || '';
+        initColor = myRecord.cardColor || '#FFFFFF';
+        if (deleteBtn) deleteBtn.classList.remove('hidden');
+      } else {
+        document.getElementById('loungePageInput').value = '';
+        document.getElementById('loungeCompletedSelect').value = 'false';
+        document.getElementById('loungeMemoInput').value = '';
+        if (deleteBtn) deleteBtn.classList.add('hidden');
+      }
+
+      state.selectedCardColor = initColor;
+      applyColorToInputs(initColor);
+
+      openModal('updateLoungeModal');
+    }
+
+    function deleteLoungeStatus() {
+      const idx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
+      if (idx !== -1) {
+        state.data.lounge.splice(idx, 1);
+        autoSync();
+        closeModal('updateLoungeModal');
+        renderLounge();
+        if (state.currentBookId) {
+          const book = state.data.books.find(b => b.id === state.currentBookId);
+          if (book) renderQuotesFeed(book);
+        }
+        showToast('내 독서 위치 카드가 라운지에서 삭제되었습니다.');
+      }
+    }
+
+    function applyColorToInputs(colorHex) {
+      const hex = colorHex.startsWith('#') ? colorHex : ('#' + colorHex);
+      const cleanHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex) ? hex : '#FFFFFF';
+      
+      const picker = document.getElementById('loungeColorPicker');
+      const textInput = document.getElementById('loungeColorInput');
+      
+      if (picker) picker.value = cleanHex.length === 4 ? `#${cleanHex[1]}${cleanHex[1]}${cleanHex[2]}${cleanHex[2]}${cleanHex[3]}${cleanHex[3]}` : cleanHex;
+      if (textInput) textInput.value = cleanHex.replace('#', '');
+      state.selectedCardColor = cleanHex;
+    }
+
+    function handleColorPickerChange(val) {
+      applyColorToInputs(val);
+    }
+
+    function handleColorTextChange(val) {
+      const trimmed = val.trim().replace('#', '');
+      if (/^[0-9A-Fa-f]{6}$/.test(trimmed)) {
+        state.selectedCardColor = '#' + trimmed;
+        const picker = document.getElementById('loungeColorPicker');
+        if (picker) picker.value = state.selectedCardColor;
+      } else if (!trimmed) {
+        state.selectedCardColor = '#FFFFFF';
+      }
+    }
+
+    function resetCardColorToDefault() {
+      applyColorToInputs('#FFFFFF');
+      showToast('기본 흰색으로 설정되었습니다.');
+    }
+
+    function saveLoungeStatus() {
+      const bookTitle = document.getElementById('loungeBookSelect').value;
+      const page = parseInt(document.getElementById('loungePageInput').value, 10);
+      const isCompleted = (document.getElementById('loungeCompletedSelect').value === 'true');
+      const memo = document.getElementById('loungeMemoInput').value.trim();
+
+      if (!isCompleted && (isNaN(page) || page <= 0)) {
+        showToast('현재 읽고 있는 페이지 번호를 입력해 주세요.');
+        return;
+      }
+
+      // 카드 색상 계산 (공란이나 잘못된 형식이면 기본 흰색 #FFFFFF)
+      let finalColor = state.selectedCardColor || '#FFFFFF';
+      const rawInput = document.getElementById('loungeColorInput').value.trim().replace('#', '');
+      if (rawInput) {
+        if (/^([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(rawInput)) {
+          finalColor = '#' + rawInput;
+        }
+      } else {
+        finalColor = '#FFFFFF';
+      }
+
+      const existingIdx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
+      const loungeObj = {
+        nickname: state.user.nickname,
+        bookTitle: bookTitle,
+        currentPage: page || 1,
+        isCompleted: isCompleted,
+        memo: memo,
+        characterEmoji: state.user.characterEmoji || '🐱',
+        customImageUrl: state.user.customImageUrl || '',
+        cardColor: finalColor
+      };
+
+      if (existingIdx !== -1) {
+        state.data.lounge[existingIdx] = loungeObj;
+      } else {
+        state.data.lounge.push(loungeObj);
+      }
+
+      autoSync();
+      closeModal('updateLoungeModal');
+      renderLounge();
+      showToast('내 독서 위치가 라운지에 갱신되었습니다!');
+    }
+
+    /* 도서 관리 (추가 / 정보수정 / 뷰어 설정) */
+    function openAddBookModal() {
+      document.getElementById('newBookTitle').value = '';
+      document.getElementById('newBookAuthor').value = '';
+      document.getElementById('newBookCoverUrl').value = '';
+      document.getElementById('newBookTotalPages').value = '300';
+      document.getElementById('newBookPeriod').value = '';
+      openModal('addBookModal');
+    }
+
+    function saveNewBook() {
+      const title = document.getElementById('newBookTitle').value.trim();
+      const author = document.getElementById('newBookAuthor').value.trim();
+      const coverUrl = document.getElementById('newBookCoverUrl').value.trim();
+      const totalPages = parseInt(document.getElementById('newBookTotalPages').value, 10) || 300;
+      const period = document.getElementById('newBookPeriod').value.trim() || '독서 중';
+
+      if (!title) {
+        showToast('도서 제목을 입력해 주세요.');
+        return;
+      }
+
+      const newBook = {
+        id: 'book-' + Date.now(),
+        title: title,
+        author: author,
+        coverUrl: coverUrl,
+        totalPages: totalPages,
+        readingPeriod: period,
+        viewerSettings: {
+          platform: '밀리의 서재',
+          font: '기본체',
+          spacing: '보통 / 1.5배'
+        },
+        quotes: []
+      };
+
+      state.data.books.push(newBook);
+      autoSync();
+      closeModal('addBookModal');
+      renderBookshelf();
+      showToast('새 책이 서재에 꽂혔습니다!');
+    }
+
+    function openEditBookModal() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      document.getElementById('editBookTitle').value = book.title;
+      document.getElementById('editBookAuthor').value = book.author || '';
+      document.getElementById('editBookCoverUrl').value = book.coverUrl || '';
+      document.getElementById('editBookTotalPages').value = book.totalPages || 300;
+      document.getElementById('editBookPeriod').value = book.readingPeriod || '';
+
+      openModal('editBookModal');
+    }
+
+    function saveEditedBook() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      const title = document.getElementById('editBookTitle').value.trim();
+      if (!title) {
+        showToast('제목을 입력해 주세요.');
+        return;
+      }
+
+      book.title = title;
+      book.author = document.getElementById('editBookAuthor').value.trim();
+      book.coverUrl = document.getElementById('editBookCoverUrl').value.trim();
+      book.totalPages = parseInt(document.getElementById('editBookTotalPages').value, 10) || 300;
+      book.readingPeriod = document.getElementById('editBookPeriod').value.trim();
+
+      autoSync();
+      closeModal('editBookModal');
+      renderBookDetail(book);
+      renderBookshelf();
+      showToast('도서 정보가 수정되었습니다.');
+    }
+
+    function openViewerSettingModal() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      const vs = book.viewerSettings || {};
+      document.getElementById('settingPlatform').value = vs.platform || '밀리의 서재';
+      document.getElementById('settingFont').value = vs.font || '';
+      document.getElementById('settingSpacing').value = vs.spacing || '';
+
+      openModal('viewerSettingModal');
+    }
+
+    function saveViewerSettings() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      book.viewerSettings = {
+        platform: document.getElementById('settingPlatform').value,
+        font: document.getElementById('settingFont').value.trim() || '기본 서체',
+        spacing: document.getElementById('settingSpacing').value.trim() || '기본 설정'
+      };
+
+      autoSync();
+      closeModal('viewerSettingModal');
+      renderBookDetail(book);
+      showToast('뷰어 통일 설정이 저장되었습니다.');
+    }
+
+    /* 구글 시트 URL 설정 */
+    function openSyncSettingsModal() {
+      document.getElementById('settingGasUrl').value = state.gasUrl || '';
+      openModal('syncSettingsModal');
+    }
+
+    function saveGasUrlSettings() {
+      const url = document.getElementById('settingGasUrl').value.trim();
+      state.gasUrl = url;
+      localStorage.setItem(STORAGE_KEY_GAS, url);
+      closeModal('syncSettingsModal');
+      showToast('연동 URL이 저장되었습니다.');
+      if (url) fetchRemoteData();
+    }
+
+    function forceSyncFromRemote() {
+      saveGasUrlSettings();
+      fetchRemoteData();
+      showToast('클라우드 데이터를 새로고침했습니다.');
+    }
+
+    /* ====================================================================
+       공통 유틸리티
+       ==================================================================== */
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2400);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
