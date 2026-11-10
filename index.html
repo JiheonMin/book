@@ -464,11 +464,11 @@
       <div class="space-y-3 text-xs">
         <div>
           <label class="block font-semibold text-stone-700 mb-1">도서 제목 *</label>
-          <input type="text" id="newBookTitle" placeholder="책 제목" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+          <input type="text" id="newBookTitle" placeholder="예: 밝은 밤" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
         </div>
         <div>
           <label class="block font-semibold text-stone-700 mb-1">저자</label>
-          <input type="text" id="newBookAuthor" placeholder="작가 이름" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
+          <input type="text" id="newBookAuthor" placeholder="예: 최은영" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-300">
         </div>
         <div>
           <label class="block font-semibold text-stone-700 mb-1">표지 이미지 링크 (선택)</label>
@@ -529,8 +529,11 @@
         </div>
       </div>
 
-      <div class="pt-2">
-        <button onclick="saveEditedBook()" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
+      <div class="pt-2 flex items-center gap-2">
+        <button type="button" onclick="deleteCurrentBook()" class="px-3.5 py-3 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold transition">
+          책 삭제
+        </button>
+        <button onclick="saveEditedBook()" class="flex-1 py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
           변경 사항 저장
         </button>
       </div>
@@ -749,45 +752,54 @@
       loadInitialState();
       renderApp();
 
-      // 외부 드래그 이벤트 시 문장 인용 준비
-      document.addEventListener('selectionchange', () => {
-        // selection state check
+      // 화면으로 다시 돌아올 때 최신 데이터 자동 동기화
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && state.gasUrl) {
+          fetchRemoteData();
+        }
       });
+
+      // 15초마다 주기적으로 다른 기기의 새 글 동기화
+      setInterval(() => {
+        if (!document.hidden && state.gasUrl) {
+          fetchRemoteData();
+        }
+      }, 15000);
     });
 
     function loadInitialState() {
-      // 1. 사용자 정보 로드 (없으면 기본값 생성)
-      const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-      if (savedUser) {
-        try {
-          state.user = JSON.parse(savedUser);
-        } catch (e) {
-          state.user = generateDefaultUser();
-        }
-      } else {
-        state.user = generateDefaultUser();
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+    /* 백그라운드 자동 연동 (Silent Sync) */
+    async function sendRemoteData() {
+      if (!state.gasUrl) return;
+      try {
+        // text/plain 전송으로 CORS preflight 방지 및 구글 서버 파싱 보장
+        await fetch(state.gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'save',
+            payload: state.data
+          })
+        });
+      } catch (err) {
+        console.warn('백그라운드 동기화 실패 (로컬 스토리지에 유지됨):', err);
       }
+    }
 
-      // 2. 책 & 라운지 데이터 로드
-      const savedData = localStorage.getItem(STORAGE_KEY_DATA);
-      if (savedData) {
-        try {
-          state.data = JSON.parse(savedData);
-        } catch (e) {
-          state.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    async function fetchRemoteData() {
+      if (!state.gasUrl) return;
+      try {
+        const res = await fetch(state.gasUrl + '?action=get&t=' + Date.now());
+        if (res.ok) {
+          const remoteJson = await res.json();
+          if (remoteJson && Array.isArray(remoteJson.books)) {
+            state.data = remoteJson;
+            saveDataLocally();
+            renderApp();
+          }
         }
-      } else {
-        state.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
-        localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(state.data));
-      }
-
-      // 3. 구글 시트 URL 로드
-      state.gasUrl = localStorage.getItem(STORAGE_KEY_GAS) || 'https://script.google.com/macros/s/AKfycbzzsPZD747KQ9qDxy6S599_1CNCjtmdr4bdAIaCzrisOvB0RpHPWkLUbU5s7RK8-UKa/exec';
-
-      // 클라우드 동기화가 설정되어 있으면 백그라운드 호출
-      if (state.gasUrl) {
-        fetchRemoteData();
+      } catch (err) {
+        console.warn('원격 데이터 가져오기 실패:', err);
       }
     }
 
@@ -812,14 +824,15 @@
       }
     }
 
-    /* 백그라운드 자동 연동 (Silent Sync) */
+    /* 백그라운드 자동 연동 (구글 Apps Script 통신 호환) */
     async function sendRemoteData() {
       if (!state.gasUrl) return;
       try {
+        // text/plain 전송으로 CORS Preflight 에러 방지 및 Apps Script e.postData.contents 수신 보장
         await fetch(state.gasUrl, {
           method: 'POST',
           mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             action: 'save',
             payload: state.data
@@ -830,20 +843,28 @@
       }
     }
 
-    async function fetchRemoteData() {
+    async function fetchRemoteData(silent = false) {
       if (!state.gasUrl) return;
       try {
-        const res = await fetch(state.gasUrl + '?action=get');
+        // 캐시 방지를 위한 타임스탬프 추가
+        const separator = state.gasUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${state.gasUrl}${separator}action=get&t=${Date.now()}`);
         if (res.ok) {
           const remoteJson = await res.json();
-          if (remoteJson && remoteJson.books) {
-            state.data = remoteJson;
-            saveDataLocally();
-            renderApp();
+          if (remoteJson && Array.isArray(remoteJson.books)) {
+            // 변경사항이 있을 때만 갱신
+            const currentStr = JSON.stringify(state.data);
+            const remoteStr = JSON.stringify(remoteJson);
+            if (currentStr !== remoteStr) {
+              state.data = remoteJson;
+              saveDataLocally();
+              renderApp();
+              if (!silent) showToast('새로운 나눔 기록을 불러왔습니다.');
+            }
           }
         }
       } catch (err) {
-        console.warn('원격 데이터 가져오기 실패:', err);
+        if (!silent) console.warn('원격 데이터 가져오기 실패:', err);
       }
     }
 
@@ -1724,16 +1745,23 @@
       showToast('도서 정보가 수정되었습니다.');
     }
 
-    function openViewerSettingModal() {
-      const book = state.data.books.find(b => b.id === state.currentBookId);
-      if (!book) return;
+    /* 서재에서 책 완전히 삭제 */
+    function deleteCurrentBook() {
+      const bookIdx = state.data.books.findIndex(b => b.id === state.currentBookId);
+      if (bookIdx === -1) return;
 
-      const vs = book.viewerSettings || {};
-      document.getElementById('settingPlatform').value = vs.platform || '밀리의 서재';
-      document.getElementById('settingFont').value = vs.font || '';
-      document.getElementById('settingSpacing').value = vs.spacing || '';
+      const bookTitle = state.data.books[bookIdx].title;
 
-      openModal('viewerSettingModal');
+      // 해당 도서 삭제
+      state.data.books.splice(bookIdx, 1);
+
+      // 라운지에 등록된 독서 위치 중 해당 책을 읽고 있던 기록도 정리
+      state.data.lounge = state.data.lounge.filter(l => l.bookTitle !== bookTitle);
+
+      autoSync();
+      closeModal('editBookModal');
+      goToHome();
+      showToast('도서가 서재에서 삭제되었습니다.');
     }
 
     function saveViewerSettings() {
