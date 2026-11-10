@@ -103,6 +103,7 @@
       max-height: 100%;
       max-width: 100%;
       object-fit: contain;
+      margin: auto;
       filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
     }
 
@@ -683,7 +684,7 @@
     /* ====================================================================
        ★ 구글 스프레드시트 배포 URL (이곳 따옴표 안에 URL을 넣어주세요)
        ==================================================================== */
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwrO5BO_c5GPaGkBf45xUgvtjCMCEocXw1KoamBRGUXd-2QDXRxHBGuVrfkCO6CyjpI/exec'; 
+    const SCRIPT_URL = ''; 
 
     /* 기본 데이터 구조 */
     const STORAGE_KEY_DATA = 'seoro_bookclub_data_v2';
@@ -1435,9 +1436,10 @@
        프로필 & 라운지 & 책 관리
        ==================================================================== */
     function openProfileModal() {
+      // 모달 열 때 이미 라운지에 등록된 이미지가 있다면 입력창에 자동 채움
       const existingLounge = (state.data && state.data.lounge) ? state.data.lounge.find(l => l.nickname === state.user.nickname) : null;
       const currentImg = state.user.customImageUrl || (existingLounge ? existingLounge.customImageUrl : '');
-
+      
       document.getElementById('profileNicknameInput').value = state.user.nickname;
       document.getElementById('profileCodeInput').value = state.user.code;
       document.getElementById('profileCustomImageInput').value = currentImg || '';
@@ -1463,7 +1465,7 @@
       showToast(`이모지가 '${emoji}'로 선택되었습니다.`);
     }
 
-   function saveProfile() {
+    function saveProfile() {
       const nickname = document.getElementById('profileNicknameInput').value.trim();
       const code = document.getElementById('profileCodeInput').value.trim();
       let customImg = document.getElementById('profileCustomImageInput').value.trim();
@@ -1486,7 +1488,7 @@
 
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
 
-      // 라운지에 내 정보 동기화
+      // 라운지 데이터에도 안전하게 동기화
       const myLoungeIdx = state.data.lounge.findIndex(l => l.nickname === nickname);
       if (myLoungeIdx !== -1) {
         state.data.lounge[myLoungeIdx].characterEmoji = state.user.characterEmoji;
@@ -1605,8 +1607,7 @@
       }
 
       const existingIdx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
-      const existingIdx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
-
+      
       // 기기간 스탠딩 이미지 URL 보존 (내 기기에 없어도 기존 라운지에 있으면 유지)
       const preservedImage = state.user.customImageUrl || (existingIdx !== -1 ? state.data.lounge[existingIdx].customImageUrl : '');
       if (preservedImage && !state.user.customImageUrl) {
