@@ -145,10 +145,6 @@
           <span id="navNickname" class="font-medium text-stone-800">참여자</span>
           <i class="fa-solid fa-chevron-down text-[10px] text-stone-400"></i>
         </button>
-
-        <button onclick="openSyncSettingsModal()" class="w-8 h-8 rounded-full border border-clean-border flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-50 transition text-xs" title="구글 시트 연동 설정">
-          <i class="fa-solid fa-gear"></i>
-        </button>
       </div>
 
     </div>
@@ -677,39 +673,6 @@
     </div>
   </div>
 
-  <!-- I. 관리자 전용 구글 시트 연동 설정 모달 -->
-  <div id="syncSettingsModal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-clean-border space-y-4">
-      <div class="flex items-center justify-between pb-2 border-b border-clean-border">
-        <h3 class="font-serif-kr font-bold text-base text-stone-900 flex items-center gap-2">
-          <i class="fa-solid fa-cloud text-stone-700 text-xs"></i>
-          구글 스프레드시트 동기화 설정
-        </h3>
-        <button onclick="closeModal('syncSettingsModal')" class="text-stone-400 hover:text-stone-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <p class="text-xs text-stone-600 leading-relaxed">
-        구글 스프레드시트 Apps Script 웹앱 URL을 입력해두면, 참여자들이 별도로 연동 버튼을 누르지 않아도 모든 독서 위치와 글이 실시간 자동 동기화됩니다.
-      </p>
-
-      <div class="space-y-2 text-xs">
-        <label class="block font-semibold text-stone-700">Google Apps Script 웹앱 URL</label>
-        <input type="text" id="settingGasUrl" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
-      </div>
-
-      <div class="pt-2 flex items-center gap-2">
-        <button onclick="saveGasUrlSettings()" class="flex-1 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition">
-          연동 URL 저장
-        </button>
-        <button onclick="forceSyncFromRemote()" class="px-3 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-medium transition">
-          지금 새로고침
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- 토스트 알림 메시지 박스 -->
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-stone-900/90 text-white text-xs px-4 py-2.5 rounded-full shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none z-50">
     알림 내용
@@ -717,10 +680,14 @@
 
   <!-- ==================== 자바스크립트 로직 ==================== -->
   <script>
+    /* ====================================================================
+       ★ 구글 스프레드시트 배포 URL (이곳 따옴표 안에 URL을 넣어주세요)
+       ==================================================================== */
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwrO5BO_c5GPaGkBf45xUgvtjCMCEocXw1KoamBRGUXd-2QDXRxHBGuVrfkCO6CyjpI/exec'; 
+
     /* 기본 데이터 구조 */
     const STORAGE_KEY_DATA = 'seoro_bookclub_data_v2';
     const STORAGE_KEY_USER = 'seoro_bookclub_user_v2';
-    const STORAGE_KEY_GAS = 'seoro_bookclub_gas_url_v2';
 
     const DEFAULT_DATA = {
       books: [],
@@ -732,7 +699,6 @@
       data: null,
       user: null,
       currentBookId: null,
-      gasUrl: '',
       activeQuoteContext: {
         quoteId: null,
         snippet: ''
@@ -752,55 +718,32 @@
       loadInitialState();
       renderApp();
 
+      if (SCRIPT_URL) {
+        fetchRemoteData(true);
+      }
+
       // 화면으로 다시 돌아올 때 최신 데이터 자동 동기화
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && state.gasUrl) {
-          fetchRemoteData();
+        if (!document.hidden && SCRIPT_URL) {
+          fetchRemoteData(true);
         }
       });
 
       // 15초마다 주기적으로 다른 기기의 새 글 동기화
       setInterval(() => {
-        if (!document.hidden && state.gasUrl) {
-          fetchRemoteData();
+        if (!document.hidden && SCRIPT_URL) {
+          fetchRemoteData(true);
         }
       }, 15000);
     });
 
     function loadInitialState() {
-    /* 백그라운드 자동 연동 (Silent Sync) */
-    async function sendRemoteData() {
-      if (!state.gasUrl) return;
-      try {
-        // text/plain 전송으로 CORS preflight 방지 및 구글 서버 파싱 보장
-        await fetch(state.gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'save',
-            payload: state.data
-          })
-        });
-      } catch (err) {
-        console.warn('백그라운드 동기화 실패 (로컬 스토리지에 유지됨):', err);
-      }
-    }
+      const savedUser = localStorage.getItem(STORAGE_KEY_USER);
+      state.user = savedUser ? JSON.parse(savedUser) : generateDefaultUser();
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
 
-    async function fetchRemoteData() {
-      if (!state.gasUrl) return;
-      try {
-        const res = await fetch(state.gasUrl + '?action=get&t=' + Date.now());
-        if (res.ok) {
-          const remoteJson = await res.json();
-          if (remoteJson && Array.isArray(remoteJson.books)) {
-            state.data = remoteJson;
-            saveDataLocally();
-            renderApp();
-          }
-        }
-      } catch (err) {
-        console.warn('원격 데이터 가져오기 실패:', err);
-      }
+      const savedData = localStorage.getItem(STORAGE_KEY_DATA);
+      state.data = savedData ? JSON.parse(savedData) : JSON.parse(JSON.stringify(DEFAULT_DATA));
     }
 
     function generateDefaultUser() {
@@ -819,17 +762,16 @@
 
     function autoSync() {
       saveDataLocally();
-      if (state.gasUrl) {
+      if (SCRIPT_URL) {
         sendRemoteData();
       }
     }
 
-    /* 백그라운드 자동 연동 (구글 Apps Script 통신 호환) */
+    /* 백그라운드 자동 연동 (구글 Apps Script 통신) */
     async function sendRemoteData() {
-      if (!state.gasUrl) return;
+      if (!SCRIPT_URL) return;
       try {
-        // text/plain 전송으로 CORS Preflight 에러 방지 및 Apps Script e.postData.contents 수신 보장
-        await fetch(state.gasUrl, {
+        await fetch(SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -839,20 +781,18 @@
           })
         });
       } catch (err) {
-        console.warn('백그라운드 동기화 실패 (로컬 스토리지에 유지됨):', err);
+        console.warn('동기화 실패:', err);
       }
     }
 
     async function fetchRemoteData(silent = false) {
-      if (!state.gasUrl) return;
+      if (!SCRIPT_URL) return;
       try {
-        // 캐시 방지를 위한 타임스탬프 추가
-        const separator = state.gasUrl.includes('?') ? '&' : '?';
-        const res = await fetch(`${state.gasUrl}${separator}action=get&t=${Date.now()}`);
+        const separator = SCRIPT_URL.includes('?') ? '&' : '?';
+        const res = await fetch(`${SCRIPT_URL}${separator}action=get&t=${Date.now()}`);
         if (res.ok) {
           const remoteJson = await res.json();
           if (remoteJson && Array.isArray(remoteJson.books)) {
-            // 변경사항이 있을 때만 갱신
             const currentStr = JSON.stringify(state.data);
             const remoteStr = JSON.stringify(remoteJson);
             if (currentStr !== remoteStr) {
@@ -1778,27 +1718,6 @@
       closeModal('viewerSettingModal');
       renderBookDetail(book);
       showToast('뷰어 통일 설정이 저장되었습니다.');
-    }
-
-    /* 구글 시트 URL 설정 */
-    function openSyncSettingsModal() {
-      document.getElementById('settingGasUrl').value = state.gasUrl || '';
-      openModal('syncSettingsModal');
-    }
-
-    function saveGasUrlSettings() {
-      const url = document.getElementById('settingGasUrl').value.trim();
-      state.gasUrl = url;
-      localStorage.setItem(STORAGE_KEY_GAS, url);
-      closeModal('syncSettingsModal');
-      showToast('연동 URL이 저장되었습니다.');
-      if (url) fetchRemoteData();
-    }
-
-    function forceSyncFromRemote() {
-      saveGasUrlSettings();
-      fetchRemoteData();
-      showToast('클라우드 데이터를 새로고침했습니다.');
     }
 
     /* ====================================================================
