@@ -756,6 +756,16 @@
       };
     }
 
+    /* 원격 라운지 데이터로부터 스탠딩 이미지 URL만 역동기화 */
+    function syncUserProfileFromRemote() {
+      if (!state.user || !state.data || !state.data.lounge) return;
+      const myRecord = state.data.lounge.find(l => l.nickname === state.user.nickname);
+      if (myRecord && myRecord.customImageUrl && !state.user.customImageUrl) {
+        state.user.customImageUrl = myRecord.customImageUrl;
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+      }
+    }
+
     function saveDataLocally() {
       localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(state.data));
     }
@@ -798,8 +808,11 @@
             if (currentStr !== remoteStr) {
               state.data = remoteJson;
               saveDataLocally();
+              syncUserProfileFromRemote();
               renderApp();
               if (!silent) showToast('새로운 나눔 기록을 불러왔습니다.');
+            } else {
+              syncUserProfileFromRemote();
             }
           }
         }
@@ -1422,9 +1435,12 @@
        프로필 & 라운지 & 책 관리
        ==================================================================== */
     function openProfileModal() {
+      const existingLounge = (state.data && state.data.lounge) ? state.data.lounge.find(l => l.nickname === state.user.nickname) : null;
+      const currentImg = state.user.customImageUrl || (existingLounge ? existingLounge.customImageUrl : '');
+
       document.getElementById('profileNicknameInput').value = state.user.nickname;
       document.getElementById('profileCodeInput').value = state.user.code;
-      document.getElementById('profileCustomImageInput').value = state.user.customImageUrl || '';
+      document.getElementById('profileCustomImageInput').value = currentImg || '';
       openModal('profileModal');
     }
 
@@ -1447,16 +1463,23 @@
       showToast(`이모지가 '${emoji}'로 선택되었습니다.`);
     }
 
-    function saveProfile() {
+   function saveProfile() {
       const nickname = document.getElementById('profileNicknameInput').value.trim();
       const code = document.getElementById('profileCodeInput').value.trim();
-      const customImg = document.getElementById('profileCustomImageInput').value.trim();
+      let customImg = document.getElementById('profileCustomImageInput').value.trim();
 
       if (!nickname) {
         showToast('닉네임을 입력해 주세요.');
         return;
       }
 
+      // 이미지 입력칸이 비어 있어도 기존 라운지에 등록된 이미지 URL이 있다면 보존
+      const existingLounge = state.data.lounge.find(l => l.nickname === nickname);
+      if (!customImg && existingLounge && existingLounge.customImageUrl) {
+        customImg = existingLounge.customImageUrl;
+      }
+
+      const oldNickname = state.user.nickname;
       state.user.nickname = nickname;
       state.user.code = code || '0000';
       state.user.customImageUrl = customImg;
@@ -1582,6 +1605,15 @@
       }
 
       const existingIdx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
+      const existingIdx = state.data.lounge.findIndex(l => l.nickname === state.user.nickname);
+
+      // 기기간 스탠딩 이미지 URL 보존 (내 기기에 없어도 기존 라운지에 있으면 유지)
+      const preservedImage = state.user.customImageUrl || (existingIdx !== -1 ? state.data.lounge[existingIdx].customImageUrl : '');
+      if (preservedImage && !state.user.customImageUrl) {
+        state.user.customImageUrl = preservedImage;
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+      }
+
       const loungeObj = {
         nickname: state.user.nickname,
         bookTitle: bookTitle,
@@ -1589,7 +1621,7 @@
         isCompleted: isCompleted,
         memo: memo,
         characterEmoji: state.user.characterEmoji || '🐱',
-        customImageUrl: state.user.customImageUrl || '',
+        customImageUrl: preservedImage || '',
         cardColor: finalColor
       };
 
