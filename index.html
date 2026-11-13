@@ -1737,6 +1737,18 @@
       showToast('도서가 서재에서 삭제되었습니다.');
     }
 
+    function openViewerSettingModal() {
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+
+      const vs = book.viewerSettings || { platform: '밀리의 서재', font: '기본체', spacing: '보통 / 1.5배' };
+      document.getElementById('settingPlatform').value = vs.platform || '밀리의 서재';
+      document.getElementById('settingFont').value = vs.font || '';
+      document.getElementById('settingSpacing').value = vs.spacing || '';
+
+      openModal('viewerSettingModal');
+    }
+    
     function saveViewerSettings() {
       const book = state.data.books.find(b => b.id === state.currentBookId);
       if (!book) return;
