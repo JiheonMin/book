@@ -1145,6 +1145,12 @@
           <div class="space-y-2">
             ${repliesHtml}
           </div>
+          <div class="flex items-center gap-1.5 pt-1">
+            <input type="text" id="direct-reply-input-${quote.id}" placeholder="문장 인용 없이 바로 댓글 남기기..." onkeydown="if(event.key==='Enter') submitDirectReply('${quote.id}')" class="flex-1 px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-300">
+            <button onclick="submitDirectReply('${quote.id}')" class="px-3 py-1.5 bg-stone-800 hover:bg-stone-900 text-white rounded-xl text-xs font-medium transition shrink-0">
+              등록
+            </button>
+          </div>
         </div>
       `;
 
@@ -1220,6 +1226,40 @@
         showToast('답글 내용을 입력해 주세요.');
         return;
       }
+
+      function submitDirectReply(quoteId) {
+      const inputEl = document.getElementById(`direct-reply-input-${quoteId}`);
+      if (!inputEl) return;
+      const text = inputEl.value.trim();
+      if (!text) {
+        showToast('댓글 내용을 입력해 주세요.');
+        return;
+      }
+
+      const book = state.data.books.find(b => b.id === state.currentBookId);
+      if (!book) return;
+      const quote = (book.quotes || []).find(q => q.id === quoteId);
+      if (!quote) return;
+
+      if (!quote.replies) quote.replies = [];
+
+      const now = new Date();
+      const dateStr = `${now.getMonth() + 1}.${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      quote.replies.push({
+        id: 'r-' + Date.now(),
+        quotedText: '',
+        text: text,
+        authorNickname: state.user.nickname,
+        characterEmoji: state.user.characterEmoji || '🐱',
+        createdAt: dateStr
+      });
+
+      inputEl.value = '';
+      autoSync();
+      renderQuotesFeed(book);
+      showToast('댓글이 등록되었습니다!');
+    }
 
       const book = state.data.books.find(b => b.id === state.currentBookId);
       if (!book) return;
